@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Task Tracker</title>
+<style>
+  :root {
+    --bg:#f5f6f8; --card:#fff; --text:#1c1f26; --muted:#6b7280; --line:#e5e7eb;
+    --accent:#4f46e5; --run:#16a34a; --pause:#f59e0b; --done:#9ca3af; --over:#dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1115; --card:#1a1d24; --text:#e8eaf0; --muted:#9aa1ae; --line:#2a2e38; --accent:#818cf8; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  main { max-width:680px; margin:0 auto; padding:16px; }
+  h1 { font-size:1.4rem; margin:8px 0 12px; }
+  .daybar { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
+  .daybar input { flex:1; }
+  .summary { display:flex; gap:8px; margin-bottom:16px; }
+  .summary div { flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; text-align:center; }
+  .summary b { display:block; font-size:1.15rem; font-variant-numeric:tabular-nums; }
+  .summary span { font-size:.75rem; color:var(--muted); }
+  form { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  form input[name=title] { flex:1 1 200px; }
+  form input[name=est] { width:110px; }
+  input { padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; }
+  button { padding:9px 14px; border:0; border-radius:8px; font:inherit; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:500; padding:6px 10px; }
+  button.start { background:var(--run); } button.pause { background:var(--pause); } button.done { background:var(--accent); }
+  .task { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; }
+  .task.running { border-color:var(--run); box-shadow:0 0 0 2px color-mix(in srgb,var(--run) 25%,transparent); }
+  .task.completed { opacity:.65; }
+  .row { display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:wrap; }
+  .title { font-weight:600; word-break:break-word; }
+  .completed .title { text-decoration:line-through; }
+  .time { font-variant-numeric:tabular-nums; font-size:1.3rem; font-weight:700; }
+  .time small { font-size:.8rem; color:var(--muted); font-weight:400; }
+  .time.over { color:var(--over); }
+  .bar { height:6px; background:var(--line); border-radius:3px; margin:8px 0; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--accent); width:0; }
+  .bar i.over { background:var(--over); }
+  .actions { display:flex; gap:6px; flex-wrap:wrap; }
+  .empty { text-align:center; color:var(--muted); padding:24px; }
+  .badge { font-size:.72rem; padding:2px 8px; border-radius:99px; background:var(--line); color:var(--muted); }
+  .running .badge { background:var(--run); color:#fff; }
+</style>
+</head>
+<body>
+<main>
+  <h1>⏱ Task Tracker</h1>
+
+  <div class="daybar">
+    <button class="ghost" id="prev">‹</button>
+    <input type="date" id="day">
+    <button class="ghost" id="next">›</button>
+    <button class="ghost" id="today">Hôm nay</button>
+  </div>
+
+  <div class="summary">
+    <div><b id="sEst">0m</b><span>Ước tính</span></div>
+    <div><b id="sSpent">0m</b><span>Đã làm</span></div>
+    <div><b id="sDone">0/0</b><span>Hoàn thành</span></div>
+  </div>
+
+  <form id="add">
+    <input name="title" placeholder="Tên task…" required maxlength="200">
+    <input name="est" type="number" min="1" step="1" placeholder="Ước tính (phút)">
+    <button>Thêm</button>
+  </form>
+
+  <div id="list"></div>
+</main>
+
+<script>
+const KEY = 'tasktracker.v1';
+let tasks = [];
+try { tasks = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(tasks)); } catch (e) {} };
+
+// task: {id, title, est (min), date 'YYYY-MM-DD', status 'idle'|'running'|'paused'|'done', elapsed (ms, excluding current run), startedAt (ms|null)}
+const $ = id => document.getElementById(id);
+const pad = n => String(n).padStart(2, '0');
+const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+let day = ymd(new Date());
+
+const spent = t => t.elapsed + (t.status === 'running' ? Date.now() - t.startedAt : 0);
+function fmt(ms) {
+  const s = Math.floor(ms / 1000);
+  return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
+}
+function fmtMin(ms) {
+  const m = Math.round(ms / 60000);
+  return m >= 60 ? `${Math.floor(m/60)}h${pad(m%60)}m` : `${m}m`;
+}
+const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+
+function pauseAll(exceptId) {
+  tasks.forEach(t => {
+    if (t.status === 'running' && t.id !== exceptId) {
+      t.elapsed += Date.now() - t.startedAt; t.startedAt = null; t.status = 'paused';
+    }
+  });
+}
+function act(id, what) {
+  const t = tasks.find(x => x.id === id); if (!t) return;
+  if (what === 'start') { pauseAll(id); t.status = 'running'; t.startedAt = Date.now(); }
+  else if (what === 'pause') { t.elapsed += Date.now() - t.startedAt; t.startedAt = null; t.status = 'paused'; }
+  else if (what === 'done') {
+    if (t.status === 'running') t.elapsed += Date.now() - t.startedAt;
+    t.startedAt = null; t.status = 'done';
+  }
+  else if (what === 'reopen') { t.status = 'paused'; }
+  else if (what === 'delete') { if (!confirm('Xoá task này?')) return; tasks = tasks.filter(x => x.id !== id); }
+  save(); render();
+}
+
+function render() {
+  $('day').value = day;
+  const list = tasks.filter(t => t.date === day);
+  $('list').innerHTML = list.length ? list.map(t => {
+    const est = t.est * 60000, sp = spent(t), over = est && sp > est;
+    const pct = est ? Math.min(100, sp / est * 100) : 0;
+    const label = {idle:'Chưa bắt đầu', running:'Đang chạy', paused:'Tạm dừng', done:'Hoàn thành'}[t.status];
+    const btns = t.status === 'done'
+      ? `<button class="ghost" data-a="reopen">Mở lại</button>`
+      : (t.status === 'running'
+          ? `<button class="pause" data-a="pause">⏸ Pause</button>`
+          : `<button class="start" data-a="start">▶ ${t.status === 'paused' ? 'Tiếp tục' : 'Bắt đầu'}</button>`)
+        + `<button class="done" data-a="done">✓ Hoàn thành</button>`;
+    return `<div class="task ${t.status === 'running' ? 'running' : ''} ${t.status === 'done' ? 'completed' : ''}" data-id="${t.id}">
+      <div class="row"><span class="title">${esc(t.title)}</span><span class="badge">${label}</span></div>
+      <div class="row">
+        <span class="time ${over ? 'over' : ''}" data-timer>${fmt(sp)} <small>/ ${t.est ? t.est + ' phút' : 'không ước tính'}</small></span>
+      </div>
+      ${t.est ? `<div class="bar"><i class="${over ? 'over' : ''}" style="width:${pct}%"></i></div>` : ''}
+      <div class="row"><div class="actions">${btns}</div><button class="ghost" data-a="delete">Xoá</button></div>
+    </div>`;
+  }).join('') : '<div class="empty">Chưa có task nào cho ngày này.</div>';
+  summary(list);
+}
+function summary(list) {
+  $('sEst').textContent = fmtMin(list.reduce((a, t) => a + t.est * 60000, 0));
+  $('sSpent').textContent = fmtMin(list.reduce((a, t) => a + spent(t), 0));
+  $('sDone').textContent = `${list.filter(t => t.status === 'done').length}/${list.length}`;
+}
+// light tick: update running timers without rebuilding DOM
+setInterval(() => {
+  const list = tasks.filter(t => t.date === day);
+  if (!list.some(t => t.status === 'running')) return;
+  list.filter(t => t.status === 'running').forEach(t => {
+    const el = document.querySelector(`[data-id="${t.id}"]`); if (!el) return;
+    const est = t.est * 60000, sp = spent(t);
+    const tm = el.querySelector('[data-timer]');
+    tm.firstChild.nodeValue = fmt(sp) + ' ';
+    tm.classList.toggle('over', est && sp > est);
+    const bar = el.querySelector('.bar i');
+    if (bar) { bar.style.width = Math.min(100, sp / est * 100) + '%'; bar.classList.toggle('over', sp > est); }
+  });
+  summary(list);
+}, 1000);
+
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('button[data-a]'); if (!b) return;
+  act(b.closest('.task').dataset.id, b.dataset.a);
+});
+$('add').addEventListener('submit', e => {
+  e.preventDefault();
+  const f = e.target;
+  tasks.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
+    title: f.title.value.trim(), est: parseInt(f.est.value) || 0, date: day,
+    status: 'idle', elapsed: 0, startedAt: null });
+  f.reset(); save(); render();
+});
+const shift = n => { const d = new Date(day + 'T00:00'); d.setDate(d.getDate() + n); day = ymd(d); render(); };
+$('prev').onclick = () => shift(-1);
+$('next').onclick = () => shift(1);
+$('today').onclick = () => { day = ymd(new Date()); render(); };
+$('day').onchange = e => { if (e.target.value) { day = e.target.value; render(); } };
+
+render();
+</script>
+</body>
+</html>
