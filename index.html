@@ -6,180 +6,428 @@
 <title>Task Tracker</title>
 <style>
   :root {
-    --bg:#f5f6f8; --card:#fff; --text:#1c1f26; --muted:#6b7280; --line:#e5e7eb;
-    --accent:#4f46e5; --run:#16a34a; --pause:#f59e0b; --done:#9ca3af; --over:#dc2626;
+    --bg:#f3f6f9; --card:#ffffff; --text:#262f38; --muted:#74818e; --line:#e1e8ee;
+    --accent:#3f7fae; --accent-soft:#e7f1f8; --accent-text:#ffffff;
+    --over:#b0533f; --over-soft:#f7e9e5; --ok:#4f8a78;
+    --radius:14px;
   }
   @media (prefers-color-scheme: dark) {
-    :root { --bg:#0f1115; --card:#1a1d24; --text:#e8eaf0; --muted:#9aa1ae; --line:#2a2e38; --accent:#818cf8; }
+    :root {
+      --bg:#1c2127; --card:#252b32; --text:#e4eaef; --muted:#8996a2; --line:#343c45;
+      --accent:#8cc4e8; --accent-soft:#2a3a47; --accent-text:#14202a;
+      --over:#e0907c; --over-soft:#3b2b27; --ok:#86c0ad;
+    }
   }
   * { box-sizing:border-box; }
-  body { margin:0; background:var(--bg); color:var(--text); font:16px/1.4 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  main { max-width:680px; margin:0 auto; padding:16px; }
-  h1 { font-size:1.4rem; margin:8px 0 12px; }
-  .daybar { display:flex; align-items:center; gap:8px; margin-bottom:12px; }
-  .daybar input { flex:1; }
-  .summary { display:flex; gap:8px; margin-bottom:16px; }
-  .summary div { flex:1; background:var(--card); border:1px solid var(--line); border-radius:10px; padding:10px; text-align:center; }
-  .summary b { display:block; font-size:1.15rem; font-variant-numeric:tabular-nums; }
-  .summary span { font-size:.75rem; color:var(--muted); }
-  form { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
-  form input[name=title] { flex:1 1 200px; }
-  form input[name=est] { width:110px; }
-  input { padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--card); color:var(--text); font:inherit; }
-  button { padding:9px 14px; border:0; border-radius:8px; font:inherit; font-weight:600; cursor:pointer; color:#fff; background:var(--accent); }
-  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--line); font-weight:500; padding:6px 10px; }
-  button.start { background:var(--run); } button.pause { background:var(--pause); } button.done { background:var(--accent); }
-  .task { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; }
-  .task.running { border-color:var(--run); box-shadow:0 0 0 2px color-mix(in srgb,var(--run) 25%,transparent); }
-  .task.completed { opacity:.65; }
-  .row { display:flex; align-items:center; gap:8px; justify-content:space-between; flex-wrap:wrap; }
+  body { margin:0; background:var(--bg); color:var(--text);
+    font:15px/1.5 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",sans-serif; }
+  main { max-width:640px; margin:0 auto; padding:20px 16px 80px; }
+  button, input, select { font:inherit; color:inherit; }
+  button { cursor:pointer; }
+
+  header { display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  h1 { font-size:1.15rem; font-weight:600; margin:0; letter-spacing:-.01em; }
+  .tools { display:flex; align-items:center; gap:6px; }
+
+  .btn { border:1px solid var(--line); background:var(--card); border-radius:10px; padding:7px 12px; }
+  .btn:hover { border-color:var(--accent); }
+  .btn.primary { background:var(--accent); color:var(--accent-text); border-color:var(--accent); font-weight:600; }
+  .btn.icon { padding:7px 10px; line-height:1; }
+  .btn.on { background:var(--accent-soft); border-color:var(--accent); color:var(--accent); }
+  .link { border:0; background:none; color:var(--muted); padding:4px 6px; border-radius:6px; font-size:.85rem; }
+  .link:hover { color:var(--accent); background:var(--accent-soft); }
+  .link.danger:hover { color:var(--over); background:var(--over-soft); }
+
+  .daynav { display:flex; align-items:center; gap:6px; margin-bottom:14px; }
+  .daynav .label { flex:1; text-align:center; font-weight:600; position:relative; }
+  .daynav .label input { position:absolute; inset:0; opacity:0; width:100%; cursor:pointer; }
+
+  .card { background:var(--card); border:1px solid var(--line); border-radius:var(--radius); }
+
+  .perf { padding:14px 16px; margin-bottom:14px; }
+  .perf .top { display:flex; justify-content:space-between; align-items:baseline; margin-bottom:8px; }
+  .perf .score { font-size:1.5rem; font-weight:600; letter-spacing:-.02em; }
+  .perf .verdict { color:var(--muted); font-size:.85rem; }
+  .perf .meta { display:flex; gap:16px; flex-wrap:wrap; margin-top:10px; color:var(--muted); font-size:.82rem; }
+  .perf .meta b { color:var(--text); font-weight:600; }
+  .bar { height:8px; background:var(--accent-soft); border-radius:99px; overflow:hidden; }
+  .bar i { display:block; height:100%; background:var(--accent); border-radius:99px; width:0; transition:width .4s; }
+  .bar.over i { background:var(--over); }
+
+  .carry { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:10px 14px;
+    background:var(--accent-soft); border-radius:var(--radius); margin-bottom:14px; font-size:.9rem; }
+
+  .task { padding:14px 14px 8px; margin-bottom:10px; }
+  .task.running { border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft); }
+  .task.completed { background:transparent; }
+  .task .head { display:flex; gap:12px; align-items:flex-start; }
+  .play { flex:none; width:40px; height:40px; border-radius:50%; border:1.5px solid var(--accent); background:transparent;
+    color:var(--accent); display:grid; place-items:center; padding:0; }
+  .play:hover, .running .play { background:var(--accent); color:var(--accent-text); }
+  .completed .play { border-color:var(--ok); color:var(--ok); }
+  .completed .play:hover { background:transparent; opacity:.6; }
+  .play svg { width:16px; height:16px; fill:currentColor; }
+  .body { flex:1; min-width:0; }
   .title { font-weight:600; word-break:break-word; }
-  .completed .title { text-decoration:line-through; }
-  .time { font-variant-numeric:tabular-nums; font-size:1.3rem; font-weight:700; }
-  .time small { font-size:.8rem; color:var(--muted); font-weight:400; }
-  .time.over { color:var(--over); }
-  .bar { height:6px; background:var(--line); border-radius:3px; margin:8px 0; overflow:hidden; }
-  .bar i { display:block; height:100%; background:var(--accent); width:0; }
-  .bar i.over { background:var(--over); }
-  .actions { display:flex; gap:6px; flex-wrap:wrap; }
-  .empty { text-align:center; color:var(--muted); padding:24px; }
-  .badge { font-size:.72rem; padding:2px 8px; border-radius:99px; background:var(--line); color:var(--muted); }
-  .running .badge { background:var(--run); color:#fff; }
+  .completed .title { color:var(--muted); text-decoration:line-through; }
+  .chips { display:flex; flex-wrap:wrap; gap:6px; margin-top:4px; }
+  .chip { font-size:.78rem; color:var(--muted); background:var(--bg); border:0; border-radius:99px; padding:1px 9px; }
+  button.chip:hover { color:var(--accent); background:var(--accent-soft); }
+  .chip.moved { color:var(--accent); background:var(--accent-soft); }
+  .chip.over { color:var(--over); background:var(--over-soft); }
+  .clock { text-align:right; font-variant-numeric:tabular-nums; font-weight:600; font-size:1.05rem; white-space:nowrap; }
+  .clock small { display:block; font-weight:400; font-size:.75rem; color:var(--muted); }
+  .clock.over small { color:var(--over); }
+  .task .bar { margin:10px 0 4px 52px; height:5px; }
+  .actions { display:flex; flex-wrap:wrap; gap:2px; margin:2px 0 0 46px; }
+  .empty { text-align:center; color:var(--muted); padding:36px 0; }
+
+  dialog { border:1px solid var(--line); border-radius:var(--radius); background:var(--card); color:var(--text);
+    padding:0; width:min(420px, calc(100vw - 32px)); }
+  dialog::backdrop { background:rgba(20,28,36,.45); }
+  dialog form { padding:18px; display:grid; gap:14px; }
+  dialog h2 { margin:0; font-size:1.05rem; }
+  label.f { display:grid; gap:5px; font-size:.82rem; color:var(--muted); }
+  label.f input[type=text], label.f input[type=number], label.f input[type=time], label.f input[type=date] {
+    width:100%; padding:9px 11px; border:1px solid var(--line); border-radius:10px; background:var(--bg); color:var(--text); }
+  label.f input:focus { outline:2px solid var(--accent-soft); border-color:var(--accent); }
+  .row2 { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  .est { display:flex; gap:8px; }
+  .est input { flex:1; min-width:0; }
+  .seg { display:flex; border:1px solid var(--line); border-radius:10px; overflow:hidden; flex:none; }
+  .seg label { padding:9px 12px; cursor:pointer; color:var(--muted); font-size:.9rem; }
+  .seg label { position:relative; } .seg input { position:absolute; opacity:0; inset:0; margin:0; cursor:pointer; }
+  .seg label:has(input:checked) { background:var(--accent); color:var(--accent-text); }
+  .hint { font-size:.8rem; color:var(--muted); min-height:1.2em; }
+  .foot { display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap; }
+  .foot .r { display:flex; gap:8px; margin-left:auto; }
+  select.btn { padding:6px 8px; }
+  .hidden { display:none !important; }
 </style>
 </head>
 <body>
 <main>
-  <h1>⏱ Task Tracker</h1>
+  <header>
+    <h1>Task Tracker</h1>
+    <div class="tools">
+      <select id="lead" class="btn hidden" title="Nhắc trước giờ bắt đầu">
+        <option value="0">Đúng giờ</option><option value="5">Trước 5p</option>
+        <option value="10">Trước 10p</option><option value="15">Trước 15p</option>
+      </select>
+      <button id="bell" class="btn icon" title="Bật/tắt thông báo nhắc task">🔔</button>
+      <button id="new" class="btn primary">+ Task mới</button>
+    </div>
+  </header>
 
-  <div class="daybar">
-    <button class="ghost" id="prev">‹</button>
-    <input type="date" id="day">
-    <button class="ghost" id="next">›</button>
-    <button class="ghost" id="today">Hôm nay</button>
+  <div class="daynav">
+    <button class="btn icon" id="prev" aria-label="Ngày trước">‹</button>
+    <div class="label"><span id="dayText"></span><input type="date" id="day" aria-label="Chọn ngày"></div>
+    <button class="btn icon" id="next" aria-label="Ngày sau">›</button>
+    <button class="btn" id="today">Hôm nay</button>
   </div>
 
-  <div class="summary">
-    <div><b id="sEst">0m</b><span>Ước tính</span></div>
-    <div><b id="sSpent">0m</b><span>Đã làm</span></div>
-    <div><b id="sDone">0/0</b><span>Hoàn thành</span></div>
-  </div>
-
-  <form id="add">
-    <input name="title" placeholder="Tên task…" required maxlength="200">
-    <input name="est" type="number" min="1" step="1" placeholder="Ước tính (phút)">
-    <button>Thêm</button>
-  </form>
-
+  <section class="card perf" id="perf"></section>
+  <div id="carry"></div>
   <div id="list"></div>
 </main>
 
-<script>
-const KEY = 'tasktracker.v1';
-let tasks = [];
-try { tasks = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify(tasks)); } catch (e) {} };
+<dialog id="dlg">
+  <form id="form" method="dialog">
+    <h2 id="dlgTitle">Task mới</h2>
+    <label class="f">Tên task
+      <input type="text" name="title" required maxlength="200" autocomplete="off">
+    </label>
+    <label class="f">Thời gian ước tính
+      <div class="est">
+        <input type="number" name="est" min="0" step="any" placeholder="vd. 60">
+        <div class="seg">
+          <label><input type="radio" name="unit" value="m" checked>phút</label>
+          <label><input type="radio" name="unit" value="h">giờ</label>
+        </div>
+      </div>
+    </label>
+    <div class="row2">
+      <label class="f">Ngày <input type="date" name="date" required></label>
+      <label class="f">Giờ bắt đầu (tuỳ chọn) <input type="time" name="time"></label>
+    </div>
+    <div class="hint" id="hint"></div>
+    <div class="foot">
+      <div id="calBtns" class="hidden">
+        <button type="button" class="link" id="gcal">📅 Google Calendar</button>
+        <button type="button" class="link" id="ics">⬇ .ics</button>
+      </div>
+      <div class="r">
+        <button type="button" class="btn" id="cancel">Huỷ</button>
+        <button class="btn primary">Lưu</button>
+      </div>
+    </div>
+  </form>
+</dialog>
 
-// task: {id, title, est (min), date 'YYYY-MM-DD', status 'idle'|'running'|'paused'|'done', elapsed (ms, excluding current run), startedAt (ms|null)}
+<script>
+const KEY = 'tasktracker.v1', SKEY = 'tasktracker.settings';
+let tasks = [], settings = { remind:false, lead:5 };
+try { tasks = JSON.parse(localStorage.getItem(KEY)) || []; } catch (e) {}
+try { settings = { ...settings, ...JSON.parse(localStorage.getItem(SKEY)) }; } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(tasks)); } catch (e) {} };
+const saveSettings = () => { try { localStorage.setItem(SKEY, JSON.stringify(settings)); } catch (e) {} };
+
+/* task: {id,title,est(min),origEst,date,time('HH:MM'|''),status idle|running|paused|done,
+          elapsed(ms),startedAt,movedFrom(date|null),notified} */
 const $ = id => document.getElementById(id);
 const pad = n => String(n).padStart(2, '0');
 const ymd = d => `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-let day = ymd(new Date());
+const parseDay = s => new Date(s + 'T00:00');
+const addDays = (s, n) => { const d = parseDay(s); d.setDate(d.getDate() + n); return ymd(d); };
+const dm = s => { const d = parseDay(s); return `${pad(d.getDate())}/${pad(d.getMonth()+1)}`; };
+const todayStr = () => ymd(new Date());
+let day = todayStr();
 
 const spent = t => t.elapsed + (t.status === 'running' ? Date.now() - t.startedAt : 0);
-function fmt(ms) {
-  const s = Math.floor(ms / 1000);
-  return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`;
-}
-function fmtMin(ms) {
-  const m = Math.round(ms / 60000);
-  return m >= 60 ? `${Math.floor(m/60)}h${pad(m%60)}m` : `${m}m`;
-}
+const clock = ms => { const s = Math.floor(ms/1000); return `${pad(Math.floor(s/3600))}:${pad(Math.floor(s%3600/60))}:${pad(s%60)}`; };
+const fmtMin = m => { m = Math.round(m); if (m < 60) return `${m}p`; const h = Math.floor(m/60), r = m%60; return r ? `${h}h${pad(r)}` : `${h}h`; };
 const esc = s => s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+const startDate = t => new Date(`${t.date}T${t.time}`);
+const endDate = t => new Date(startDate(t).getTime() + (t.est || 30) * 60000);
+const dayName = s => ['Chủ nhật','Thứ hai','Thứ ba','Thứ tư','Thứ năm','Thứ sáu','Thứ bảy'][parseDay(s).getDay()];
 
-function pauseAll(exceptId) {
+/* ---------- actions ---------- */
+function pauseRunning(exceptId) {
   tasks.forEach(t => {
     if (t.status === 'running' && t.id !== exceptId) {
       t.elapsed += Date.now() - t.startedAt; t.startedAt = null; t.status = 'paused';
     }
   });
 }
+function move(t, toDate) {
+  pauseRunning();
+  t.movedFrom = t.movedFrom || t.date;
+  t.date = toDate; t.notified = false;
+}
 function act(id, what) {
   const t = tasks.find(x => x.id === id); if (!t) return;
-  if (what === 'start') { pauseAll(id); t.status = 'running'; t.startedAt = Date.now(); }
-  else if (what === 'pause') { t.elapsed += Date.now() - t.startedAt; t.startedAt = null; t.status = 'paused'; }
-  else if (what === 'done') {
+  if (what === 'toggle') {
+    if (t.status === 'done') t.status = 'paused';
+    else if (t.status === 'running') { t.elapsed += Date.now() - t.startedAt; t.startedAt = null; t.status = 'paused'; }
+    else { pauseRunning(id); t.status = 'running'; t.startedAt = Date.now(); }
+  } else if (what === 'done') {
     if (t.status === 'running') t.elapsed += Date.now() - t.startedAt;
     t.startedAt = null; t.status = 'done';
-  }
-  else if (what === 'reopen') { t.status = 'paused'; }
+  } else if (what === 'move') {
+    move(t, t.date < todayStr() ? todayStr() : addDays(t.date, 1));
+  } else if (what === 'edit') { openDialog(t); return; }
+  else if (what === 'gcal') { window.open(gcalUrl(t), '_blank', 'noopener'); return; }
   else if (what === 'delete') { if (!confirm('Xoá task này?')) return; tasks = tasks.filter(x => x.id !== id); }
   save(); render();
 }
 
+/* ---------- render ---------- */
+const ICON = {
+  play:'<svg viewBox="0 0 16 16"><path d="M4 2.5v11l9-5.5z"/></svg>',
+  pause:'<svg viewBox="0 0 16 16"><path d="M3.5 2h3.2v12H3.5zM9.3 2h3.2v12H9.3z"/></svg>',
+  check:'<svg viewBox="0 0 16 16"><path d="M6.2 11.6 2.6 8l1.2-1.2 2.4 2.4 6-6L13.4 4.4z"/></svg>'
+};
+const order = (a, b) => (a.status === 'done') - (b.status === 'done')
+  || (a.time || '99:99').localeCompare(b.time || '99:99') || a.id.localeCompare(b.id);
+
 function render() {
+  $('dayText').textContent = day === todayStr() ? `Hôm nay · ${dm(day)}` : `${dayName(day)} · ${dm(day)}`;
   $('day').value = day;
-  const list = tasks.filter(t => t.date === day);
-  $('list').innerHTML = list.length ? list.map(t => {
-    const est = t.est * 60000, sp = spent(t), over = est && sp > est;
-    const pct = est ? Math.min(100, sp / est * 100) : 0;
-    const label = {idle:'Chưa bắt đầu', running:'Đang chạy', paused:'Tạm dừng', done:'Hoàn thành'}[t.status];
-    const btns = t.status === 'done'
-      ? `<button class="ghost" data-a="reopen">Mở lại</button>`
-      : (t.status === 'running'
-          ? `<button class="pause" data-a="pause">⏸ Pause</button>`
-          : `<button class="start" data-a="start">▶ ${t.status === 'paused' ? 'Tiếp tục' : 'Bắt đầu'}</button>`)
-        + `<button class="done" data-a="done">✓ Hoàn thành</button>`;
-    return `<div class="task ${t.status === 'running' ? 'running' : ''} ${t.status === 'done' ? 'completed' : ''}" data-id="${t.id}">
-      <div class="row"><span class="title">${esc(t.title)}</span><span class="badge">${label}</span></div>
-      <div class="row">
-        <span class="time ${over ? 'over' : ''}" data-timer>${fmt(sp)} <small>/ ${t.est ? t.est + ' phút' : 'không ước tính'}</small></span>
-      </div>
-      ${t.est ? `<div class="bar"><i class="${over ? 'over' : ''}" style="width:${pct}%"></i></div>` : ''}
-      <div class="row"><div class="actions">${btns}</div><button class="ghost" data-a="delete">Xoá</button></div>
+  const list = tasks.filter(t => t.date === day).sort(order);
+
+  // carry-over banner (today only)
+  const late = tasks.filter(t => t.date < todayStr() && t.status !== 'done');
+  $('carry').innerHTML = day === todayStr() && late.length
+    ? `<div class="carry"><span>${late.length} task chưa xong từ hôm trước</span>
+       <button class="btn" data-carry>Chuyển hết sang hôm nay</button></div>` : '';
+
+  $('list').innerHTML = list.length ? list.map(card).join('')
+    : '<div class="empty">Chưa có task nào cho ngày này.</div>';
+  updatePerf(list);
+}
+
+function card(t) {
+  const est = t.est * 60000, sp = spent(t), over = est && sp > est;
+  const running = t.status === 'running', done = t.status === 'done';
+  const range = t.time ? `${t.time}–${hhmm(endDate(t))}` : '';
+  const chips = [
+    range && `<button class="chip" data-a="edit" title="Đổi giờ">🕐 ${range}</button>`,
+    `<button class="chip ${over ? 'over' : ''}" data-a="edit" title="Cập nhật ước tính">${t.est ? 'ước tính ' + fmtMin(t.est) : '+ ước tính'}</button>`,
+    t.origEst && t.origEst !== t.est && `<span class="chip">ban đầu ${fmtMin(t.origEst)}</span>`,
+    t.movedFrom && `<span class="chip moved">↪ từ ${dm(t.movedFrom)}</span>`
+  ].filter(Boolean).join('');
+  const rem = !est ? '' : sp <= est ? `còn ${fmtMin(Math.ceil((est - sp) / 60000))}` : `quá ${fmtMin(Math.floor((sp - est) / 60000))}`;
+  const moveLabel = t.date < todayStr() ? '→ Hôm nay' : '→ Ngày mai';
+  return `<article class="card task ${running ? 'running' : ''} ${done ? 'completed' : ''}" data-id="${t.id}">
+    <div class="head">
+      <button class="play" data-a="toggle" aria-label="${running ? 'Tạm dừng' : done ? 'Mở lại' : 'Bắt đầu'}">${done ? ICON.check : running ? ICON.pause : ICON.play}</button>
+      <div class="body"><div class="title">${esc(t.title)}</div><div class="chips">${chips}</div></div>
+      <div class="clock ${over ? 'over' : ''}" data-clock><span>${clock(sp)}</span><small data-rem>${rem}</small></div>
+    </div>
+    ${t.est ? `<div class="bar ${over ? 'over' : ''}"><i style="width:${Math.min(100, sp / est * 100)}%"></i></div>` : ''}
+    <div class="actions">
+      ${done ? '' : '<button class="link" data-a="done">✓ Hoàn thành</button>'}
+      <button class="link" data-a="edit">Sửa</button>
+      ${done ? '' : `<button class="link" data-a="move">${moveLabel}</button>`}
+      ${t.time ? '<button class="link" data-a="gcal">📅 Lịch</button>' : ''}
+      <button class="link danger" data-a="delete">Xoá</button>
+    </div></article>`;
+}
+
+/* ---------- performance ---------- */
+function updatePerf(list) {
+  if (!list.length) { $('perf').innerHTML = '<div class="verdict">Hiệu suất hôm nay sẽ hiện khi có task.</div>'; return; }
+  const w = t => t.est || 30;
+  const total = list.reduce((a, t) => a + w(t), 0);
+  const doneW = list.filter(t => t.status === 'done').reduce((a, t) => a + w(t), 0);
+  const pct = Math.round(doneW / total * 100);
+  const focus = list.reduce((a, t) => a + spent(t), 0);
+  const acc = list.filter(t => t.status === 'done' && t.est && spent(t) > 60000)
+    .map(t => { const e = t.est * 60000, s = spent(t); return Math.min(e, s) / Math.max(e, s); });
+  const accTxt = acc.length ? Math.round(acc.reduce((a, b) => a + b, 0) / acc.length * 100) + '%' : '—';
+  const verdict = pct >= 100 ? 'Hoàn thành tất cả' : pct >= 70 ? 'Rất tốt' : pct >= 40 ? 'Đang tiến triển' : 'Mới bắt đầu';
+  $('perf').innerHTML = `<div class="top"><span class="score">${pct}%</span><span class="verdict">${verdict}</span></div>
+    <div class="bar"><i style="width:${pct}%"></i></div>
+    <div class="meta">
+      <span>Xong <b>${list.filter(t => t.status === 'done').length}/${list.length}</b> task</span>
+      <span>Tập trung <b>${fmtMin(focus / 60000)}</b></span>
+      <span>Ước tính đúng <b>${accTxt}</b></span>
     </div>`;
-  }).join('') : '<div class="empty">Chưa có task nào cho ngày này.</div>';
-  summary(list);
 }
-function summary(list) {
-  $('sEst').textContent = fmtMin(list.reduce((a, t) => a + t.est * 60000, 0));
-  $('sSpent').textContent = fmtMin(list.reduce((a, t) => a + spent(t), 0));
-  $('sDone').textContent = `${list.filter(t => t.status === 'done').length}/${list.length}`;
-}
-// light tick: update running timers without rebuilding DOM
+
+/* ---------- live tick ---------- */
 setInterval(() => {
-  const list = tasks.filter(t => t.date === day);
-  if (!list.some(t => t.status === 'running')) return;
-  list.filter(t => t.status === 'running').forEach(t => {
+  const list = tasks.filter(t => t.date === day && t.status === 'running');
+  if (!list.length) return;
+  list.forEach(t => {
     const el = document.querySelector(`[data-id="${t.id}"]`); if (!el) return;
-    const est = t.est * 60000, sp = spent(t);
-    const tm = el.querySelector('[data-timer]');
-    tm.firstChild.nodeValue = fmt(sp) + ' ';
-    tm.classList.toggle('over', est && sp > est);
-    const bar = el.querySelector('.bar i');
-    if (bar) { bar.style.width = Math.min(100, sp / est * 100) + '%'; bar.classList.toggle('over', sp > est); }
+    const est = t.est * 60000, sp = spent(t), over = est && sp > est;
+    el.querySelector('[data-clock] span').textContent = clock(sp);
+    el.querySelector('[data-rem]').textContent = !est ? '' : sp <= est ? `còn ${fmtMin(Math.ceil((est - sp) / 60000))}` : `quá ${fmtMin(Math.floor((sp - est) / 60000))}`;
+    el.querySelector('[data-clock]').classList.toggle('over', !!over);
+    const bar = el.querySelector('.bar');
+    if (bar) { bar.firstElementChild.style.width = Math.min(100, sp / est * 100) + '%'; bar.classList.toggle('over', !!over); }
   });
-  summary(list);
+  updatePerf(tasks.filter(t => t.date === day));
 }, 1000);
 
+/* ---------- dialog (create / edit) ---------- */
+const dlg = $('dlg'), form = $('form');
+let editing = null;
+function openDialog(t) {
+  editing = t || null;
+  $('dlgTitle').textContent = t ? 'Sửa task' : 'Task mới';
+  form.title.value = t ? t.title : '';
+  const useH = t && t.est >= 60 && t.est % 30 === 0;
+  form.unit.value = useH ? 'h' : 'm';
+  form.est.value = t && t.est ? (useH ? t.est / 60 : t.est) : '';
+  form.date.value = t ? t.date : day;
+  form.time.value = t ? t.time : '';
+  $('calBtns').classList.toggle('hidden', !(t && t.time));
+  hint(); dlg.showModal(); form.title.focus();
+}
+function readEst() {
+  const v = parseFloat(form.est.value);
+  return v > 0 ? Math.round(v * (form.unit.value === 'h' ? 60 : 1)) : 0;
+}
+function hint() {
+  const e = readEst(), tm = form.time.value;
+  let s = e ? `= ${fmtMin(e)}` : '';
+  if (tm) { const st = new Date(`${form.date.value || day}T${tm}`); s += (s ? ' · ' : '') + `${tm} → ${hhmm(new Date(st.getTime() + (e || 30) * 60000))}`; }
+  $('hint').textContent = s;
+}
+['input', 'change'].forEach(ev => form.addEventListener(ev, hint));
+$('cancel').onclick = () => dlg.close();
+dlg.addEventListener('click', e => { if (e.target === dlg) dlg.close(); });
+form.addEventListener('submit', e => {
+  e.preventDefault();
+  const title = form.title.value.trim(); if (!title) return;
+  const est = readEst(), time = form.time.value, date = form.date.value || day;
+  if (editing) {
+    const t = editing;
+    if (est !== t.est && t.est && !t.origEst) t.origEst = t.est;
+    if (time !== t.time || date !== t.date) t.notified = false;
+    if (date !== t.date) { if (t.status === 'running') pauseRunning(); t.movedFrom = t.movedFrom || t.date; }
+    Object.assign(t, { title, est, time, date });
+  } else {
+    tasks.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), title, est, origEst: 0,
+      date, time, status: 'idle', elapsed: 0, startedAt: null, movedFrom: null, notified: false });
+  }
+  if (date !== day) day = date;
+  save(); dlg.close(); render();
+});
+$('gcal').onclick = () => editing && window.open(gcalUrl(editing), '_blank', 'noopener');
+$('ics').onclick = () => editing && downloadIcs(editing);
+
+/* ---------- calendar ---------- */
+const icsDt = d => `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}00`;
+function gcalUrl(t) {
+  const p = new URLSearchParams({ action:'TEMPLATE', text:t.title, dates:`${icsDt(startDate(t))}/${icsDt(endDate(t))}`,
+    details:'Tạo từ Task Tracker' });
+  return 'https://calendar.google.com/calendar/render?' + p;
+}
+function downloadIcs(t) {
+  const ics = ['BEGIN:VCALENDAR','VERSION:2.0','PRODID:-//TaskTracker//VI','BEGIN:VEVENT',
+    `UID:${t.id}@tasktracker`, `DTSTAMP:${icsDt(new Date())}`, `DTSTART:${icsDt(startDate(t))}`, `DTEND:${icsDt(endDate(t))}`,
+    `SUMMARY:${t.title.replace(/[\r\n,;]/g, ' ')}`,
+    'BEGIN:VALARM','ACTION:DISPLAY','DESCRIPTION:Nhắc task',`TRIGGER:-PT${settings.lead}M`,'END:VALARM','END:VEVENT','END:VCALENDAR'].join('\r\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([ics], { type:'text/calendar' }));
+  a.download = 'task.ics'; a.click(); URL.revokeObjectURL(a.href);
+}
+
+/* ---------- reminders (browser notifications; tab must stay open) ---------- */
+function syncBell() {
+  $('bell').classList.toggle('on', settings.remind);
+  $('lead').classList.toggle('hidden', !settings.remind);
+  $('lead').value = settings.lead;
+}
+$('bell').onclick = async () => {
+  if (!settings.remind) {
+    if (!('Notification' in window)) return alert('Trình duyệt này không hỗ trợ thông báo.');
+    const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (p !== 'granted') return alert('Bạn cần cho phép thông báo cho trang này trong cài đặt trình duyệt.');
+  }
+  settings.remind = !settings.remind; saveSettings(); syncBell();
+};
+$('lead').onchange = e => { settings.lead = +e.target.value; tasks.forEach(t => t.notified = false); saveSettings(); save(); };
+function notify(t, minsLeft) {
+  const body = minsLeft > 0 ? `Bắt đầu lúc ${t.time} (còn ${minsLeft} phút)` : `Đến giờ rồi · ${t.time}`;
+  try { new Notification(t.title, { body, tag:t.id }); } catch (e) {}
+}
+setInterval(() => {
+  if (!settings.remind || !('Notification' in window) || Notification.permission !== 'granted') return;
+  const now = Date.now();
+  tasks.forEach(t => {
+    if (t.notified || t.status === 'done' || !t.time) return;
+    const st = startDate(t).getTime(), fireAt = st - settings.lead * 60000;
+    if (now >= fireAt) {
+      t.notified = true;
+      if (now < st + 30 * 60000) notify(t, Math.max(0, Math.ceil((st - now) / 60000)));
+      save();
+    }
+  });
+}, 15000);
+
+/* ---------- wiring ---------- */
 $('list').addEventListener('click', e => {
-  const b = e.target.closest('button[data-a]'); if (!b) return;
+  const b = e.target.closest('[data-a]'); if (!b) return;
   act(b.closest('.task').dataset.id, b.dataset.a);
 });
-$('add').addEventListener('submit', e => {
-  e.preventDefault();
-  const f = e.target;
-  tasks.push({ id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6),
-    title: f.title.value.trim(), est: parseInt(f.est.value) || 0, date: day,
-    status: 'idle', elapsed: 0, startedAt: null });
-  f.reset(); save(); render();
+$('carry').addEventListener('click', e => {
+  if (!e.target.closest('[data-carry]')) return;
+  tasks.filter(t => t.date < todayStr() && t.status !== 'done').forEach(t => move(t, todayStr()));
+  save(); render();
 });
-const shift = n => { const d = new Date(day + 'T00:00'); d.setDate(d.getDate() + n); day = ymd(d); render(); };
-$('prev').onclick = () => shift(-1);
-$('next').onclick = () => shift(1);
-$('today').onclick = () => { day = ymd(new Date()); render(); };
+$('new').onclick = () => openDialog();
+$('prev').onclick = () => { day = addDays(day, -1); render(); };
+$('next').onclick = () => { day = addDays(day, 1); render(); };
+$('today').onclick = () => { day = todayStr(); render(); };
 $('day').onchange = e => { if (e.target.value) { day = e.target.value; render(); } };
 
-render();
+tasks.forEach(t => { t.time = t.time || ''; t.origEst = t.origEst || 0; t.movedFrom = t.movedFrom || null; });
+syncBell(); render();
 </script>
 </body>
 </html>
